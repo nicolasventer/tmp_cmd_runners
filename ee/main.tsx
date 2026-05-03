@@ -5,7 +5,9 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
-export default function App() {
+/* -------------------- CommandRunner -------------------- */
+
+function CommandRunner({ id, onRemove }: { id: string; onRemove: (id: string) => void }) {
 	const [cmd, setCmd] = useState("");
 	const [output, setOutput] = useState("");
 	const [running, setRunning] = useState(false);
@@ -15,13 +17,14 @@ export default function App() {
 		setOutput("");
 		setRunning(true);
 
-		const id = Date.now().toString();
-		setProcessId(id);
+		const pid = Date.now().toString();
+		setProcessId(pid);
 
 		try {
-			const response = await fetch(`http://localhost:8000/run?id=${id}&cmd=${encodeURIComponent(cmd)}`);
+			const response = await fetch(`http://localhost:8000/run?id=${pid}&cmd=${encodeURIComponent(cmd)}`);
 
 			if (!response.body) return;
+
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder("utf-8");
 
@@ -33,11 +36,13 @@ export default function App() {
 				setOutput((prev) => prev + chunk);
 			}
 
-			// flush remaining bytes
 			setOutput((prev) => prev + decoder.decode());
 		} catch (err) {
-			if (err instanceof Error) setOutput("Error: " + err.message);
-			else setOutput("An unknown error occurred: " + JSON.stringify(err));
+			if (err instanceof Error) {
+				setOutput("Error: " + err.message);
+			} else {
+				setOutput("Unknown error: " + JSON.stringify(err));
+			}
 		}
 
 		setRunning(false);
@@ -53,35 +58,73 @@ export default function App() {
 	};
 
 	return (
+		<div style={styles.runner}>
+			<div style={styles.row}>
+				<input
+					value={cmd}
+					onChange={(e) => setCmd(e.target.value)}
+					onKeyDown={(e) => e.key === "Enter" && runCommand()}
+					placeholder="Enter command"
+					style={styles.input}
+				/>
+
+				<button onClick={runCommand} disabled={running} style={styles.button}>
+					{running ? "Running..." : "Run"}
+				</button>
+
+				<button onClick={stopCommand} disabled={!running} style={{ ...styles.button, backgroundColor: "#dc2626" }}>
+					Stop
+				</button>
+
+				<button onClick={() => onRemove(id)} style={{ ...styles.button, backgroundColor: "#555" }}>
+					Remove
+				</button>
+			</div>
+
+			<pre style={styles.output}>{output || "Output will appear here..."}</pre>
+		</div>
+	);
+}
+
+/* -------------------- App (manager) -------------------- */
+
+export default function App() {
+	const [runners, setRunners] = useState<string[]>([]);
+
+	const addRunner = () => {
+		setRunners((prev) => [...prev, crypto.randomUUID()]);
+	};
+
+	const removeRunner = (id: string) => {
+		setRunners((prev) => prev.filter((r) => r !== id));
+	};
+
+	return (
 		<div style={styles.page}>
 			<div style={styles.container}>
-				<h1 style={styles.title}>Command Runner</h1>
+				<h1 style={styles.title}>Command Runner Pool</h1>
 
-				<div style={styles.row}>
-					<input
-						value={cmd}
-						onChange={(e) => setCmd(e.target.value)}
-						onKeyDown={(ev) => void (ev.key === "Enter" && runCommand())}
-						placeholder="Enter command"
-						style={styles.input}
-					/>
-					<button onClick={runCommand} disabled={running} style={styles.button}>
-						{running ? "Running..." : "Run"}
-					</button>
-					<button onClick={stopCommand} disabled={!running} style={{ ...styles.button, backgroundColor: "#dc2626" }}>
-						Stop
-					</button>
-				</div>
+				<button onClick={addRunner} style={styles.addButton}>
+					+ Add Runner
+				</button>
 
-				<pre style={styles.output}>{output || "Output will appear here..."}</pre>
+				{runners.length === 0 && <p style={{ opacity: 0.6 }}>No runners yet</p>}
+
+				{runners.map((id) => (
+					<CommandRunner key={id} id={id} onRemove={removeRunner} />
+				))}
 			</div>
 		</div>
 	);
 }
 
+/* -------------------- render -------------------- */
+
 createRoot(document.body).render(<App />);
 
-const styles = {
+/* -------------------- styles -------------------- */
+
+const styles: Record<string, React.CSSProperties> = {
 	page: {
 		backgroundColor: "#111",
 		color: "#fff",
@@ -90,17 +133,33 @@ const styles = {
 		fontFamily: "Arial, sans-serif",
 	},
 	container: {
-		maxWidth: "800px",
+		maxWidth: "900px",
 		margin: "0 auto",
 	},
 	title: {
 		fontSize: "24px",
+		marginBottom: "10px",
+	},
+	addButton: {
+		padding: "10px 14px",
 		marginBottom: "20px",
+		backgroundColor: "#16a34a",
+		color: "#fff",
+		border: "none",
+		borderRadius: "4px",
+		cursor: "pointer",
+	},
+	runner: {
+		marginBottom: "20px",
+		padding: "10px",
+		border: "1px solid #333",
+		borderRadius: "6px",
+		backgroundColor: "#1a1a1a",
 	},
 	row: {
 		display: "flex",
 		gap: "10px",
-		marginBottom: "20px",
+		marginBottom: "10px",
 	},
 	input: {
 		flex: 1,
@@ -112,20 +171,19 @@ const styles = {
 		borderRadius: "4px",
 	},
 	button: {
-		padding: "10px 16px",
+		padding: "10px 12px",
 		fontSize: "14px",
 		backgroundColor: "#2563eb",
 		border: "none",
 		color: "#fff",
 		borderRadius: "4px",
 		cursor: "pointer",
-		opacity: 1,
 	},
 	output: {
 		backgroundColor: "#000",
-		padding: "15px",
+		padding: "12px",
 		borderRadius: "4px",
-		height: "400px",
+		height: "250px",
 		overflowY: "auto",
 		whiteSpace: "pre-wrap",
 		border: "1px solid #333",
