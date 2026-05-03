@@ -28,6 +28,10 @@
 	background-color: transparent;
 }
 
+:root {
+	interpolate-size: allow-keywords;
+}
+
 body {
 	margin: 0;
 	font-family: Arial, sans-serif;
@@ -117,12 +121,41 @@ body {
 	background: #555;
 }
 
+.runner-output {
+	flex-grow: 1;
+	position: relative;
+}
+
 .output {
+	position: absolute;
+	overflow: auto;
+	height: 100%;
+	width: 100%;
 	background: black;
 	padding: 10px;
-	flex-grow: 1;
-	overflow: auto;
 	border-radius: 4px;
 	border: 1px solid #333;
 	margin: 0;
+}
+
+.my-custom-resize-handle {
+	position: absolute;
+	height: 16px;
+	width: 16px;
+	transform: rotate(-45deg);
+	bottom: 10px;
+	right: 10px;
+	cursor: se-resize;
+	z-index: 100;
+	user-select: none;
+	background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="%23666" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 20 20"><path d="m10 3 2 2H8l2-2v14l-2-2h4l-2 2"/></svg>');
+	background-position: center;
+	background-repeat: no-repeat;
+}
+
+.transform-zone {
+	overflow: hidden;
+	transition: height 0.3s ease;
+	display: flex;
+	gap: 10px;
 }

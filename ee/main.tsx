@@ -20,7 +20,14 @@ export default function App() {
 
 	useEffect(() => {
 		if (!gridEl.current) return;
-		grid.current = GridStack.init({ alwaysShowResizeHandle: true, cellHeight: 80 });
+		grid.current = GridStack.init({
+			alwaysShowResizeHandle: true,
+			cellHeight: 80,
+			resizable: {
+				handles: "se",
+				element: ".my-custom-resize-handle",
+			},
+		});
 		// grid.current.on("change", () => console.log(grid.current!.save()));
 	}, []);
 

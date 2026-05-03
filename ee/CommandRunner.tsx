@@ -1,11 +1,32 @@
 import autosize from "autosize";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export default function CommandRunner({ id, onRemove }: { id: string; onRemove: (id: string) => void }) {
 	const [cmd, setCmd] = useState("");
 	const [output, setOutput] = useState("");
 	const [running, setRunning] = useState(false);
 	const [processId, setProcessId] = useState<string | null>(null);
+	const [bShowTransform, setBShowTransform] = useState(false);
+	const [transformOutput, setTransformOutput] = useState("export default (output) => output.toUpperCase();");
+	const [bApplyingTransform, setBApplyingTransform] = useState(false);
+	const transformFn = useRef<{ url: string; fn: (output: string) => string } | null>(null);
+
+	const setApplyTransform = async (applying: boolean) => {
+		if (!applying) {
+			setBApplyingTransform(false);
+			if (transformFn.current) {
+				URL.revokeObjectURL(transformFn.current.url);
+				transformFn.current = null;
+			}
+			return;
+		}
+		const blob = new Blob([transformOutput], { type: "text/javascript" });
+		const url = URL.createObjectURL(blob);
+		const module = await import(url);
+		const fn = module.default;
+		transformFn.current = { url, fn };
+		setBApplyingTransform(true);
+	};
 
 	const runCommand = async () => {
 		setOutput("");
@@ -27,7 +48,7 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 				if (done) break;
 
 				const chunk = decoder.decode(value, { stream: true });
-				setOutput((prev) => prev + chunk);
+				setOutput(transformFn.current?.fn(chunk) ?? ((prev) => prev + chunk));
 			}
 
 			setOutput((prev) => prev + decoder.decode());
@@ -86,7 +107,30 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 				</button>
 			</div>
 
-			<pre className="output">{output || "Output will appear here..."}</pre>
+			<div className="runner-output">
+				<pre className="output">{output || "Output will appear here..."}</pre>
+				<div className="my-custom-resize-handle"></div>
+			</div>
+			<button onClick={() => setBShowTransform((prev) => !prev)} className="btn secondary">
+				{bShowTransform ? "Hide Transform" : "Show Transform"}
+			</button>
+			<div className="transform-zone" style={{ height: bShowTransform ? "auto" : 0 }}>
+				<textarea
+					value={transformOutput}
+					className="input"
+					placeholder={`Enter transformation output... example:
+export default (output) => output.toUpperCase();`}
+					onChange={(ev) => setTransformOutput(ev.currentTarget.value)}
+					onKeyDown={(ev) => void autosize(ev.currentTarget)}
+				/>
+				<button
+					onClick={() => setApplyTransform(!bApplyingTransform)}
+					className={"btn " + (bApplyingTransform ? "danger" : "")}
+					disabled={!transformOutput.trim()}
+				>
+					{bApplyingTransform ? "Applying..." : "Apply Transform"}
+				</button>
+			</div>
 		</div>
 	);
 }
