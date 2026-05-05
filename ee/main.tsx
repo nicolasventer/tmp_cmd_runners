@@ -28,7 +28,6 @@ export default function App() {
 				element: ".my-custom-resize-handle",
 			},
 		});
-		// grid.current.on("change", () => console.log(grid.current!.save()));
 	}, []);
 
 	const removeRunner = useCallback((id: string) => {
