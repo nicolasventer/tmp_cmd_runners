@@ -3,33 +3,63 @@ import { Editor } from "@monaco-editor/react";
 import autosize from "autosize";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export default function CommandRunner({ id, onRemove }: { id: string; onRemove: (id: string) => void }) {
+export type CommandRunnerProps = {
+	id: string;
+	onRemove: (id: string) => void;
+};
+
+export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
+	/* -------------------- STATE -------------------- */
 	const [cmd, setCmd] = useState("");
 	const [output, setOutput] = useState("");
+
 	const [running, setRunning] = useState(false);
 	const [processId, setProcessId] = useState<string | null>(null);
+
 	const [bShowTransform, setBShowTransform] = useState(false);
 	const [transformOutput, setTransformOutput] = useState("");
 	const [bApplyingTransform, setBApplyingTransform] = useState(false);
-	const transformFn = useRef<{ url: string; fn: (output: string) => string } | null>(null);
 
+	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
+
+	/* -------------------- REFS -------------------- */
+	const transformFn = useRef<{
+		url: string;
+		fn: (output: string) => string;
+	} | null>(null);
+
+	const observer = useRef<ResizeObserver | null>(null);
+	const editorRef = useRef<Parameters<OnMount>[0]>(null);
+
+	const parentRef = useRef<HTMLDivElement>(null);
+	const otherRef = useRef<HTMLDivElement>(null);
+	const runnerRef = useRef<HTMLDivElement>(null);
+	const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+	/* -------------------- TRANSFORM -------------------- */
 	const setApplyTransform = async (applying: boolean) => {
 		if (!applying) {
 			setBApplyingTransform(false);
+
 			if (transformFn.current) {
 				URL.revokeObjectURL(transformFn.current.url);
 				transformFn.current = null;
 			}
+
 			return;
 		}
+
 		const blob = new Blob([transformOutput], { type: "text/javascript" });
+
 		const url = URL.createObjectURL(blob);
 		const module = await import(url);
-		const fn = module.default;
-		transformFn.current = { url, fn };
+
+		transformFn.current = { url, fn: module.default };
+
 		setBApplyingTransform(true);
 	};
 
+	/* -------------------- COMMAND -------------------- */
 	const runCommand = async () => {
 		setOutput("");
 		setRunning(true);
@@ -50,6 +80,8 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 				if (done) break;
 
 				const chunk = decoder.decode(value, { stream: true });
+
+				// ⚠️ KEEPING YOUR EXACT BEHAVIOR
 				setOutput(transformFn.current?.fn(chunk) ?? ((prev) => prev + chunk));
 			}
 
@@ -70,54 +102,70 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 		setRunning(false);
 	};
 
-	const observer = useRef<ResizeObserver>(null);
-
-	const parentRef = useRef<HTMLDivElement>(null);
-	const otherRef = useRef<HTMLDivElement>(null);
-	const runnerRef = useRef<HTMLDivElement>(null);
-	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
+	/* -------------------- RESIZE -------------------- */
 	const runnerObserver = useMemo(
 		() =>
-			new ResizeObserver((entries) =>
-				entries.forEach((_, i) => {
-					if (i !== 0) return;
-					const parentRect = parentRef.current?.getBoundingClientRect();
-					const otherRect = otherRef.current?.getBoundingClientRect();
-					const x = parentRect && otherRect ? otherRect.x - parentRect.x : undefined;
-					const y = parentRect && otherRect ? otherRect.y - parentRect.y : undefined;
-					if (x && y) setEditorHandle({ x, y });
-				}),
-			),
+			new ResizeObserver((entries) => {
+				if (!entries.length) return;
+
+				const parentRect = parentRef.current?.getBoundingClientRect();
+				const otherRect = otherRef.current?.getBoundingClientRect();
+
+				if (!parentRect || !otherRect) return;
+
+				const x = otherRect.x - parentRect.x;
+				const y = otherRect.y - parentRect.y;
+
+				setEditorHandle({ x, y });
+			}),
 		[],
 	);
 
 	useEffect(() => {
 		if (!runnerRef.current || !textareaRef.current) return;
+
 		runnerObserver.observe(runnerRef.current);
 		runnerObserver.observe(textareaRef.current);
+
 		return () => runnerObserver.disconnect();
-	}, []);
+	}, [runnerObserver]);
 
-	const editorRef = useRef<Parameters<OnMount>["0"]>(null);
+	/* -------------------- EDITOR -------------------- */
+	const handleEditorMount: OnMount = (editor) => {
+		editorRef.current = editor;
+		editor.onMouseDown((e) => e.event.stopPropagation());
+		observer.current = new ResizeObserver((entries) =>
+			entries.forEach((e) =>
+				editor.layout({
+					width: e.contentRect.width,
+					height: e.contentRect.height,
+				}),
+			),
+		);
+		const transformZoneParent = document.getElementById(`ghost-editor-${id}`);
+		if (transformZoneParent) observer.current.observe(transformZoneParent);
+	};
 
+	/* -------------------- UI -------------------- */
 	return (
 		<div className="runner" ref={runnerRef}>
+			{/* COMMAND INPUT */}
 			<div className="runner-row">
 				<textarea
+					ref={textareaRef}
+					className="input"
 					value={cmd}
+					disabled={running}
+					placeholder="Enter command"
 					onChange={(e) => setCmd(e.target.value)}
 					onKeyDown={(e) => {
 						autosize(e.currentTarget);
+
 						if (e.key === "Enter" && e.ctrlKey) {
-							runCommand();
 							e.preventDefault();
+							runCommand();
 						}
 					}}
-					placeholder="Enter command"
-					className="input"
-					disabled={running}
-					ref={textareaRef}
 				/>
 
 				{running ? (
@@ -131,20 +179,24 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 				)}
 
 				<button
+					className="btn remove"
 					onClick={() => {
 						stopCommand();
 						observer.current?.disconnect();
 						onRemove(id);
 					}}
-					className="btn remove"
 				>
 					Remove
 				</button>
 			</div>
-			<div className="runner-output" id={`runner-output-${id}`} ref={parentRef}>
+
+			{/* OUTPUT */}
+			<div className="runner-output" ref={parentRef}>
 				<pre className="output">{output || "Output will appear here..."}</pre>
+
 				<div className="my-custom-resize-handle">
 					<div className="handle" />
+
 					<div
 						style={{
 							position: "absolute",
@@ -173,44 +225,37 @@ export default function CommandRunner({ id, onRemove }: { id: string; onRemove: 
 					</div>
 				</div>
 			</div>
+
+			{/* TOGGLE */}
 			<button onClick={() => setBShowTransform((prev) => !prev)} className="btn secondary">
 				{bShowTransform ? "Hide Transform" : "Show Transform"}
 			</button>
+
+			{/* TRANSFORM ZONE */}
 			<div className="transform-zone" style={{ height: bShowTransform ? "auto" : 0 }}>
 				<div style={{ flexGrow: 1, position: "relative" }} id={`ghost-editor-${id}`}>
 					<div className="other-custom-resize-handle" ref={otherRef} />
 				</div>
+
 				<div style={{ position: "absolute", left: 0, top: 0 }}>
 					<Editor
 						language="javascript"
 						value={transformOutput}
-						onChange={(value) => setTransformOutput(value ?? "")}
-						onMount={(editor) => {
-							editorRef.current = editor;
-							editor.onMouseDown((e) => e.event.stopPropagation());
-							const transformZoneParent = document.getElementById(`ghost-editor-${id}`);
-							observer.current = new ResizeObserver((entries) =>
-								entries.forEach((e) =>
-									editor.layout({
-										width: e.contentRect.width,
-										height: e.contentRect.height,
-									}),
-								),
-							);
-							observer.current!.observe(transformZoneParent!);
-						}}
+						onChange={(v) => setTransformOutput(v ?? "")}
+						onMount={handleEditorMount}
 						options={{ automaticLayout: false }}
 					/>
 				</div>
+
 				<button
-					onClick={() => setApplyTransform(!bApplyingTransform)}
-					className={`btn ${bApplyingTransform ? "danger" : ""} apply-transform`}
-					disabled={!transformOutput.trim()}
 					id={`btn-${id}`}
+					disabled={!transformOutput.trim()}
+					className={`btn ${bApplyingTransform ? "danger" : ""} apply-transform`}
+					onClick={() => setApplyTransform(!bApplyingTransform)}
 				>
 					{bApplyingTransform ? "Applying..." : "Apply Transform"}
 				</button>
 			</div>
 		</div>
 	);
-}
+};

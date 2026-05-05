@@ -6,7 +6,7 @@ import { GridStack } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import CommandRunner from "./CommandRunner";
+import { CommandRunner } from "./CommandRunner";
 import "./styles.css";
 
 type Runner = {

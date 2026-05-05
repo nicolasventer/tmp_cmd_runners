@@ -111,7 +111,6 @@ body {
 	font-size: 13px;
 	font-weight: 500;
 	cursor: pointer;
-	transition: all 0.15s ease;
 	background: #2563eb;
 	color: white;
 
@@ -181,8 +180,6 @@ body {
 	background: rgba(220, 38, 38, 0.08);
 	border: 1px solid rgba(220, 38, 38, 0.35);
 	color: #fca5a5; /* soft red text */
-
-	transition: all 0.15s ease;
 }
 
 /* Hover = clearly destructive */
