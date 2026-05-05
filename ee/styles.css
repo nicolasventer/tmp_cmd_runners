@@ -216,6 +216,31 @@ body {
 	position: relative;
 }
 
+.scroll-to-bottom {
+	position: absolute;
+	bottom: 12px;
+	right: 12px;
+
+	width: 36px;
+	height: 36px;
+	border-radius: 18px;
+
+	border: none;
+	cursor: pointer;
+
+	background: #222;
+	color: white;
+	font-size: 18px;
+	line-height: 36px;
+
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+	z-index: 999;
+}
+
 .output {
 	position: absolute;
 	overflow: auto;

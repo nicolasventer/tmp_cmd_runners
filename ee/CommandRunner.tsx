@@ -22,6 +22,8 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 
 	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
 
+	const [isAtBottom, setIsAtBottom] = useState(true);
+
 	/* -------------------- REFS -------------------- */
 	const transformFn = useRef<{
 		url: string;
@@ -36,6 +38,8 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 	const runnerRef = useRef<HTMLDivElement>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+	const outputRef = useRef<HTMLPreElement>(null);
+
 	/* -------------------- TRANSFORM -------------------- */
 	const setApplyTransform = async (applying: boolean) => {
 		if (!applying) {
@@ -45,23 +49,21 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 				URL.revokeObjectURL(transformFn.current.url);
 				transformFn.current = null;
 			}
-
 			return;
 		}
 
 		const blob = new Blob([transformOutput], { type: "text/javascript" });
-
 		const url = URL.createObjectURL(blob);
 		const module = await import(url);
 
 		transformFn.current = { url, fn: module.default };
-
 		setBApplyingTransform(true);
 	};
 
 	/* -------------------- COMMAND -------------------- */
 	const runCommand = async () => {
 		setOutput("");
+		setIsAtBottom(true);
 		setRunning(true);
 
 		const pid = Date.now().toString();
@@ -81,8 +83,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 
 				const chunk = decoder.decode(value, { stream: true });
 
-				// ⚠️ KEEPING YOUR EXACT BEHAVIOR
-				setOutput(transformFn.current?.fn(chunk) ?? ((prev) => prev + chunk));
+				setOutput((prev) => (transformFn.current ? transformFn.current.fn(prev + chunk) : prev + chunk));
 			}
 
 			setOutput((prev) => prev + decoder.decode());
@@ -100,6 +101,28 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 		await fetch(`http://localhost:8000/stop?id=${processId}`);
 		setOutput((prev) => prev + "\n[Stopped]\n");
 		setRunning(false);
+	};
+
+	/* -------------------- AUTO SCROLL -------------------- */
+	useEffect(() => {
+		if (!isAtBottom) return;
+
+		const el = outputRef.current;
+		if (!el) return;
+
+		el.scrollTop = el.scrollHeight;
+	}, [output]);
+
+	const scrollToBottom = () => {
+		const el = outputRef.current;
+		if (!el) return;
+
+		el.scrollTo({
+			top: el.scrollHeight,
+			behavior: "smooth",
+		});
+
+		setIsAtBottom(true);
 	};
 
 	/* -------------------- RESIZE -------------------- */
@@ -134,6 +157,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 	const handleEditorMount: OnMount = (editor) => {
 		editorRef.current = editor;
 		editor.onMouseDown((e) => e.event.stopPropagation());
+
 		observer.current = new ResizeObserver((entries) =>
 			entries.forEach((e) =>
 				editor.layout({
@@ -142,6 +166,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 				}),
 			),
 		);
+
 		const transformZoneParent = document.getElementById(`ghost-editor-${id}`);
 		if (transformZoneParent) observer.current.observe(transformZoneParent);
 	};
@@ -192,7 +217,29 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 
 			{/* OUTPUT */}
 			<div className="runner-output" ref={parentRef}>
-				<pre className="output">{output || "Output will appear here..."}</pre>
+				<pre
+					ref={outputRef}
+					className="output"
+					onScroll={() => {
+						const el = outputRef.current;
+						if (!el) return;
+
+						const threshold = 10;
+
+						const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+
+						setIsAtBottom(atBottom);
+					}}
+				>
+					{output || "Output will appear here..."}
+				</pre>
+
+				{/* Scroll to bottom button */}
+				{!isAtBottom && (
+					<button className="scroll-to-bottom" onClick={scrollToBottom}>
+						↓
+					</button>
+				)}
 
 				<div className="my-custom-resize-handle">
 					<div className="handle" />
@@ -215,9 +262,15 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 								if (!editorRef.current) return;
 								const el = document.getElementById(`btn-${id}`);
 								if (!el) return;
-								const startHeight = { height: el.clientHeight, clientY: ev.clientY };
+
+								const startHeight = {
+									height: el.clientHeight,
+									clientY: ev.clientY,
+								};
+
 								const moveFn = (ev: PointerEvent) =>
 									(el.style.height = `${ev.clientY - startHeight.clientY + startHeight.height}px`);
+
 								document.addEventListener("pointermove", moveFn);
 								document.addEventListener("pointerup", () => document.removeEventListener("pointermove", moveFn));
 							}}
