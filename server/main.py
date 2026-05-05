@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+import signal
 import subprocess
 import os
 os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -17,16 +18,62 @@ app.add_middleware(
 processes = {}
 
 
+def pop_process(process_id: str):
+    return processes.pop(process_id, None)
+
+
+def build_popen_kwargs():
+    kwargs = {
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "shell": True,
+    }
+
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+
+    return kwargs
+
+
+def stop_process_tree(process: subprocess.Popen):
+    if process.poll() is not None:
+        return
+
+    if os.name == "nt":
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=5)
+            return
+        except Exception:
+            pass
+
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return
+
+    try:
+        pgid = os.getpgid(process.pid)
+    except ProcessLookupError:
+        return
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        os.killpg(pgid, signal.SIGKILL)
+        process.wait(timeout=5)
+
+
 def stream_process(process_id: str, command: str):
     try:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            shell=True,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-        )
+        process = subprocess.Popen(command, **build_popen_kwargs())
 
         processes[process_id] = process
 
@@ -40,7 +87,7 @@ def stream_process(process_id: str, command: str):
         process.wait()
 
     finally:
-        processes.pop(process_id, None)
+        pop_process(process_id)
 
 
 @app.get("/run")
@@ -59,15 +106,10 @@ def stop(id: str):
         raise HTTPException(status_code=404, detail="Process not found")
 
     try:
-        # 🔥 Kill entire process tree (Windows)
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        stop_process_tree(process)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    processes.pop(id, None)
+    pop_process(id)
 
     return {"status": "stopped"}

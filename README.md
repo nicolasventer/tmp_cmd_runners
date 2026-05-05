@@ -39,7 +39,7 @@ The backend lives in `server/` and exposes two HTTP endpoints:
 - `GET /run?id=<id>&cmd=<command>` to start a command and stream its output
 - `GET /stop?id=<id>` to stop a running command by its runner ID
 
-The current implementation stores active processes in memory and uses Windows-specific process termination logic when stopping commands.
+The current implementation stores active processes in memory and uses OS-specific process-group handling so commands can be stopped on both Windows and Linux.
 
 ## Quick Start
 
@@ -47,17 +47,18 @@ The current implementation stores active processes in memory and uses Windows-sp
 
 - [Bun](https://bun.sh/)
 - Python 3.10+
+- [`pipx`](https://pipx.pypa.io/)
 
 ### 1. Start the backend
 
 From `server/`:
 
 ```bash
-pip install "fastapi[standard]"
+pipx install "fastapi[standard]"
 fastapi dev main.py --host 127.0.0.1 --port 8000
 ```
 
-If you are not on Windows, the app may still partially work, but the current stop-process implementation is written for Windows.
+The backend stop flow is designed to work on both Windows and Linux.
 
 ### 2. Start the frontend
 
@@ -101,7 +102,7 @@ CommandRunners/
 - There is no authentication or authorization layer.
 - CORS is fully open in the current server implementation.
 - Running processes are tracked in memory only.
-- Stop-process behavior is currently implemented with Windows process APIs.
+- Stop-process behavior depends on platform-specific process-group APIs, so edge cases may still vary slightly between shells and operating systems.
 - The frontend currently targets a backend at `http://localhost:8000` with no environment-based configuration.
 
 ## Security Notice

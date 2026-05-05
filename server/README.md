@@ -5,13 +5,15 @@ This is the FastAPI backend for CommandRunners. It starts shell commands, stream
 ## Requirements
 
 - Python 3.10+
-- `fastapi[standard]`
+- [`pipx`](https://pipx.pypa.io/)
 
 ## Setup
 
 ```bash
-pip install "fastapi[standard]"
+pipx install "fastapi[standard]"
 ```
+
+If you already have `fastapi` installed another way, you can keep using that.
 
 ## Run
 
@@ -61,12 +63,10 @@ Example:
 
 ## Platform Notes
 
-The current stop-process flow is Windows-specific:
+The backend now uses platform-appropriate process-group handling so the stop endpoint works on both Windows and Linux:
 
-- new processes are created with `CREATE_NEW_PROCESS_GROUP`
-- process termination uses `taskkill /F /T /PID ...`
-
-Because of this, the backend is best documented as Windows-ready today. Running it on other platforms would require different process-group creation and termination logic.
+- Windows starts commands with `CREATE_NEW_PROCESS_GROUP` and falls back to `taskkill /F /T /PID ...` if a graceful stop does not finish quickly.
+- Linux starts commands in a new session and terminates the process group with `SIGTERM`, followed by `SIGKILL` only if needed.
 
 ## Security Warning
 
