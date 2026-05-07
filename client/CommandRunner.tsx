@@ -186,7 +186,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 					className="input"
 					value={command}
 					disabled={running}
-					placeholder="Enter command"
+					placeholder="Enter command (Ctrl+Enter to run)"
 					onChange={(e) => onCommandChange(id, e.target.value)}
 					onKeyDown={(e) => {
 						autosize(e.currentTarget);

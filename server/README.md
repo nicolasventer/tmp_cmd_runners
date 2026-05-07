@@ -1,6 +1,6 @@
 # Server
 
-This is the FastAPI backend for CommandRunners. It starts shell commands, streams their output back to the client, and allows a running command to be stopped by ID.
+This is the FastAPI backend for CommandRunners. It starts shell commands, streams their output back to the client, allows a running command to be stopped by ID, and persists saved frontend dashboard states as JSON files.
 
 ## Requirements
 
@@ -85,6 +85,16 @@ Example:
 POST /state?filename=session-1
 ```
 
+Response shape:
+
+```json
+{
+  "status": "saved",
+  "filename": "session-1.json",
+  "path": "C:/.../server/states/session-1.json"
+}
+```
+
 ### `GET /states`
 
 Lists all saved state files from `server/states/`.
@@ -111,6 +121,11 @@ Example:
 /state?filename=session-1.json
 ```
 
+Notes:
+
+- Filenames are normalized to stay inside `server/states/`.
+- Omitting `.json` still resolves to the matching JSON filename.
+
 ### `POST /state/rename`
 
 Renames a saved state file inside `server/states/`.
@@ -124,6 +139,17 @@ Request body:
 }
 ```
 
+Response shape:
+
+```json
+{
+  "status": "renamed",
+  "old_filename": "session-1.json",
+  "new_filename": "session-2.json",
+  "path": "C:/.../server/states/session-2.json"
+}
+```
+
 ## Implementation Notes
 
 - Active processes are stored in an in-memory dictionary keyed by runner ID.
@@ -132,6 +158,7 @@ Request body:
 - CORS is currently open to all origins, methods, and headers.
 - Saved app states are written as JSON files in `server/states/`.
 - State management endpoints validate filenames and keep all file access scoped to `server/states/`.
+- Saved state data includes runner configuration and layout, but not live process state or streamed output history.
 
 ## Platform Notes
 

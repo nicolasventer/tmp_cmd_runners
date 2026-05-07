@@ -219,15 +219,6 @@ export default function App() {
 			<div className="header">
 				<h3>Command Runners</h3>
 				<div className="header-controls">
-					<select className="state-select" value={selectedStateFile} onChange={(e) => setSelectedStateFile(e.target.value)}>
-						<option value={NEW_STATE_VALUE}>new</option>
-						{stateFiles.map((filename) => (
-							<option key={filename} value={filename}>
-								{filename}
-							</option>
-						))}
-					</select>
-
 					<button
 						onClick={() => {
 							refreshStateFiles().catch((error: unknown) => {
@@ -239,6 +230,15 @@ export default function App() {
 					>
 						Refresh
 					</button>
+					<div />
+					<select className="state-select" value={selectedStateFile} onChange={(e) => setSelectedStateFile(e.target.value)}>
+						<option value={NEW_STATE_VALUE}>new</option>
+						{stateFiles.map((filename) => (
+							<option key={filename} value={filename}>
+								{filename}
+							</option>
+						))}
+					</select>
 					<button
 						onClick={() => {
 							loadSelectedState().catch((error: unknown) => {
@@ -275,6 +275,8 @@ export default function App() {
 					>
 						Rename
 					</button>
+					<div />
+					<div />
 					<button onClick={addRunner} className="btn">
 						Add Runner
 					</button>
