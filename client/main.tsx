@@ -11,11 +11,35 @@ import type { AppState } from "./AppState";
 import { CommandRunner } from "./CommandRunner";
 import "./styles.css";
 
+const NEW_STATE_VALUE = "__new__";
+
 export default function App() {
 	const [state, setState] = useState<AppState>({ idToRunner: {} });
+	const [stateFiles, setStateFiles] = useState<string[]>([]);
+	const [selectedStateFile, setSelectedStateFile] = useState(NEW_STATE_VALUE);
+	const [hasChanged, setHasChanged] = useState(false);
 	const gridEl = useRef<HTMLDivElement>(null);
 	const grid = useRef<GridStack | null>(null);
 	const runnerIds = Object.keys(state.idToRunner).join(",");
+
+	const refreshStateFiles = useCallback(async () => {
+		const response = await fetch("http://localhost:8000/states");
+		if (!response.ok) {
+			throw new Error("Failed to fetch state files");
+		}
+
+		const data = (await response.json()) as { files: string[] };
+		setStateFiles(data.files);
+		setSelectedStateFile((prev) => (prev === NEW_STATE_VALUE || data.files.includes(prev) ? prev : NEW_STATE_VALUE));
+		return data.files;
+	}, []);
+
+	useEffect(() => {
+		refreshStateFiles().catch((error: unknown) => {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			window.alert(`Failed to refresh state files: ${message}`);
+		});
+	}, [refreshStateFiles]);
 
 	useEffect(() => {
 		if (!gridEl.current) return;
@@ -30,6 +54,7 @@ export default function App() {
 		});
 
 		const syncLayout = (_event: Event, items: GridStackNode[]) => {
+			setHasChanged(true);
 			setState((prev) => {
 				const next = { ...prev, idToRunner: { ...prev.idToRunner } };
 				let changed = false;
@@ -69,6 +94,7 @@ export default function App() {
 	}, []);
 
 	const removeRunner = useCallback((id: string) => {
+		setHasChanged(true);
 		setState((prev) => {
 			const { [id]: _removed, ...rest } = prev.idToRunner;
 			return { idToRunner: rest };
@@ -76,6 +102,7 @@ export default function App() {
 	}, []);
 
 	const addRunner = useCallback(() => {
+		setHasChanged(true);
 		const id = Date.now().toString();
 		setState((prev) => ({
 			idToRunner: {
@@ -90,6 +117,7 @@ export default function App() {
 	}, []);
 
 	const updateRunner = useCallback((id: string, updates: Partial<AppState["idToRunner"][string]>) => {
+		setHasChanged(true);
 		setState((prev) => {
 			const runner = prev.idToRunner[id];
 			if (!runner) return prev;
@@ -102,6 +130,66 @@ export default function App() {
 			};
 		});
 	}, []);
+
+	const loadSelectedState = useCallback(async () => {
+		if (selectedStateFile === NEW_STATE_VALUE) return;
+
+		const response = await fetch(`http://localhost:8000/state?filename=${encodeURIComponent(selectedStateFile)}`);
+		if (!response.ok) {
+			throw new Error("Failed to load selected state");
+		}
+
+		const nextState = (await response.json()) as AppState;
+		setState(nextState);
+		setHasChanged(false);
+	}, [selectedStateFile]);
+
+	const saveSelectedState = useCallback(async () => {
+		const filename = selectedStateFile === NEW_STATE_VALUE ? "" : selectedStateFile;
+		const response = await fetch(`http://localhost:8000/state?filename=${encodeURIComponent(filename)}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(state),
+		});
+
+		if (!response.ok) {
+			throw new Error("Failed to save state");
+		}
+
+		const data = (await response.json()) as { filename: string };
+		await refreshStateFiles();
+		setSelectedStateFile(data.filename);
+		setHasChanged(false);
+	}, [refreshStateFiles, selectedStateFile, state]);
+
+	const renameSelectedState = useCallback(async () => {
+		if (selectedStateFile === NEW_STATE_VALUE) return;
+
+		const newFilename = window.prompt("Rename state file", selectedStateFile);
+		if (!newFilename || newFilename === selectedStateFile) return;
+
+		const response = await fetch("http://localhost:8000/state/rename", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				old_filename: selectedStateFile,
+				new_filename: newFilename,
+			}),
+		});
+
+		if (!response.ok) {
+			throw new Error("Failed to rename state");
+		}
+
+		const data = (await response.json()) as { new_filename: string };
+		await refreshStateFiles();
+		setSelectedStateFile(data.new_filename);
+		setHasChanged(false);
+	}, [refreshStateFiles, selectedStateFile]);
 
 	useEffect(() => {
 		if (!grid.current) return;
@@ -130,9 +218,67 @@ export default function App() {
 		<div className="page">
 			<div className="header">
 				<h3>Command Runners</h3>
-				<button onClick={addRunner} className="btn">
-					Add Runner
-				</button>
+				<div className="header-controls">
+					<select className="state-select" value={selectedStateFile} onChange={(e) => setSelectedStateFile(e.target.value)}>
+						<option value={NEW_STATE_VALUE}>new</option>
+						{stateFiles.map((filename) => (
+							<option key={filename} value={filename}>
+								{filename}
+							</option>
+						))}
+					</select>
+
+					<button
+						onClick={() => {
+							refreshStateFiles().catch((error: unknown) => {
+								const message = error instanceof Error ? error.message : "Unknown error";
+								window.alert(`Failed to refresh state files: ${message}`);
+							});
+						}}
+						className="btn secondary"
+					>
+						Refresh
+					</button>
+					<button
+						onClick={() => {
+							loadSelectedState().catch((error: unknown) => {
+								const message = error instanceof Error ? error.message : "Unknown error";
+								window.alert(`Failed to load state: ${message}`);
+							});
+						}}
+						className="btn secondary"
+						disabled={selectedStateFile === NEW_STATE_VALUE}
+					>
+						Load
+					</button>
+					<button
+						onClick={() => {
+							saveSelectedState().catch((error: unknown) => {
+								const message = error instanceof Error ? error.message : "Unknown error";
+								window.alert(`Failed to save state: ${message}`);
+							});
+						}}
+						className="btn"
+						disabled={!hasChanged}
+					>
+						Save
+					</button>
+					<button
+						onClick={() => {
+							renameSelectedState().catch((error: unknown) => {
+								const message = error instanceof Error ? error.message : "Unknown error";
+								window.alert(`Failed to rename state: ${message}`);
+							});
+						}}
+						className="btn secondary"
+						disabled={selectedStateFile === NEW_STATE_VALUE}
+					>
+						Rename
+					</button>
+					<button onClick={addRunner} className="btn">
+						Add Runner
+					</button>
+				</div>
 			</div>
 			<div className="grid-stack" ref={gridEl}>
 				{Object.entries(state.idToRunner).map(([id, runner]) => (

@@ -51,6 +51,24 @@ body {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.header-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.state-select {
+	min-width: 180px;
+	padding: 8px 10px;
+	background: #1f1f1f;
+	border: 1px solid #444;
+	color: white;
+	border-radius: 6px;
 }
 
 /* button */

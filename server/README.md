@@ -54,12 +54,84 @@ Example:
 /stop?id=123
 ```
 
+### `POST /state`
+
+Stores the full frontend app state as JSON under `server/states/`.
+
+Query parameters:
+
+- `filename`: optional output filename. If omitted or empty, the server generates one automatically.
+
+Request body:
+
+```json
+{
+  "idToRunner": {
+    "123": {
+      "command": "python --version",
+      "transform": "",
+      "layout": {
+        "w": 6,
+        "h": 3
+      }
+    }
+  }
+}
+```
+
+Example:
+
+```text
+POST /state?filename=session-1
+```
+
+### `GET /states`
+
+Lists all saved state files from `server/states/`.
+
+Response shape:
+
+```json
+{
+  "files": ["session-1.json", "state-20260507-030000.json"]
+}
+```
+
+### `GET /state`
+
+Returns the parsed JSON content of a saved global state file.
+
+Query parameters:
+
+- `filename`: state filename to load
+
+Example:
+
+```text
+/state?filename=session-1.json
+```
+
+### `POST /state/rename`
+
+Renames a saved state file inside `server/states/`.
+
+Request body:
+
+```json
+{
+  "old_filename": "session-1.json",
+  "new_filename": "session-2"
+}
+```
+
 ## Implementation Notes
 
 - Active processes are stored in an in-memory dictionary keyed by runner ID.
 - Command output is streamed with FastAPI's `StreamingResponse`.
 - The server merges stderr into stdout before sending output back to the client.
 - CORS is currently open to all origins, methods, and headers.
+- Saved app states are written as JSON files in `server/states/`.
+- State management endpoints validate filenames and keep all file access scoped to `server/states/`.
 
 ## Platform Notes
 
