@@ -17,6 +17,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 	const [output, setOutput] = useState("");
 
 	const [running, setRunning] = useState(false);
+	const [stopping, setStopping] = useState(false);
 	const [processId, setProcessId] = useState<string | null>(null);
 
 	const [bShowTransform, setBShowTransform] = useState(false);
@@ -41,6 +42,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	const outputRef = useRef<HTMLPreElement>(null);
+	const stopInFlightRef = useRef(false);
 
 	/* -------------------- TRANSFORM -------------------- */
 	const setApplyTransform = async (applying: boolean) => {
@@ -64,9 +66,12 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 
 	/* -------------------- COMMAND -------------------- */
 	const runCommand = async () => {
+		if (running || stopping) return;
+
 		setOutput("");
 		setIsAtBottom(true);
 		setRunning(true);
+		setStopping(false);
 
 		const pid = Date.now().toString();
 		setProcessId(pid);
@@ -94,15 +99,43 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 		}
 
 		setRunning(false);
+		setStopping(false);
 		setProcessId(null);
 	};
 
 	const stopCommand = async () => {
-		if (!processId) return;
+		const pid = processId;
+		if (!pid || stopInFlightRef.current) return;
 
-		await fetch(`http://localhost:8000/stop?id=${processId}`);
-		setOutput((prev) => prev + "\n[Stopped]\n");
-		setRunning(false);
+		stopInFlightRef.current = true;
+		setStopping(true);
+
+		try {
+			const response = await fetch(`http://localhost:8000/stop?id=${encodeURIComponent(pid)}`);
+			if (!response.ok && response.status !== 404) {
+				throw new Error(`Failed to stop process (${response.status})`);
+			}
+
+			setOutput((prev) => {
+				if (prev.endsWith("\n[Stopped]\n") || prev === "[Stopped]\n") {
+					return prev;
+				}
+
+				const separator = prev.length === 0 || prev.endsWith("\n") ? "" : "\n";
+				return `${prev}${separator}[Stopped]\n`;
+			});
+			setRunning(false);
+			setProcessId((current) => (current === pid ? null : current));
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Unknown error";
+			setOutput((prev) => {
+				const separator = prev.length === 0 || prev.endsWith("\n") ? "" : "\n";
+				return `${prev}${separator}[Stop failed: ${message}]\n`;
+			});
+		} finally {
+			setStopping(false);
+			stopInFlightRef.current = false;
+		}
 	};
 
 	/* -------------------- AUTO SCROLL -------------------- */
@@ -185,7 +218,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 					ref={textareaRef}
 					className="input"
 					value={command}
-					disabled={running}
+					disabled={running || stopping}
 					placeholder="Enter command (Ctrl+Enter to run)"
 					onChange={(e) => onCommandChange(id, e.target.value)}
 					onKeyDown={(e) => {
@@ -199,11 +232,11 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 				/>
 
 				{running ? (
-					<button onClick={stopCommand} className="btn danger">
-						Stop
+					<button onClick={stopCommand} className="btn danger" disabled={stopping}>
+						{stopping ? "Stopping..." : "Stop"}
 					</button>
 				) : (
-					<button onClick={runCommand} className="btn">
+					<button onClick={runCommand} className="btn" disabled={stopping}>
 						Run
 					</button>
 				)}

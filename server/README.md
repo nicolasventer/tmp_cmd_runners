@@ -162,9 +162,9 @@ Response shape:
 
 ## Platform Notes
 
-The backend now uses platform-appropriate process-group handling so the stop endpoint works on both Windows and Linux:
+The backend now uses platform-appropriate process-tree handling so the stop endpoint works on both Windows and Linux:
 
-- Windows starts commands with `CREATE_NEW_PROCESS_GROUP` and falls back to `taskkill /F /T /PID ...` if a graceful stop does not finish quickly.
+- Windows stops the target process tree with `taskkill /T /PID ...` and falls back to `taskkill /F /T /PID ...` if a graceful stop does not finish quickly.
 - Linux starts commands in a new session and terminates the process group with `SIGTERM`, followed by `SIGKILL` only if needed.
 
 ## Security Warning

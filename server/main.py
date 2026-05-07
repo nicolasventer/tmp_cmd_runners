@@ -8,6 +8,7 @@ import signal
 import subprocess
 import os
 import json
+import threading
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 app = FastAPI()
@@ -21,7 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-processes = {}
+processes: dict[str, subprocess.Popen] = {}
+processes_lock = threading.Lock()
 
 
 class Layout(BaseModel):
@@ -46,8 +48,25 @@ class RenameStateRequest(BaseModel):
     new_filename: str
 
 
-def pop_process(process_id: str):
-    return processes.pop(process_id, None)
+def register_process(process_id: str, process: subprocess.Popen):
+    with processes_lock:
+        processes[process_id] = process
+
+
+def get_process(process_id: str):
+    with processes_lock:
+        return processes.get(process_id)
+
+
+def take_process(process_id: str):
+    with processes_lock:
+        return processes.pop(process_id, None)
+
+
+def pop_process_if_same(process_id: str, process: subprocess.Popen):
+    with processes_lock:
+        if processes.get(process_id) is process:
+            processes.pop(process_id, None)
 
 
 def build_popen_kwargs():
@@ -66,25 +85,58 @@ def build_popen_kwargs():
     return kwargs
 
 
+def wait_for_process_exit(process: subprocess.Popen, timeout: float):
+    try:
+        process.wait(timeout=timeout)
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+
+
+def run_taskkill(process: subprocess.Popen, force: bool):
+    command = ["taskkill", "/T", "/PID", str(process.pid)]
+    if force:
+        command.insert(1, "/F")
+
+    subprocess.run(
+        command,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
 def stop_process_tree(process: subprocess.Popen):
     if process.poll() is not None:
         return
 
     if os.name == "nt":
         try:
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-            process.wait(timeout=5)
-            return
+            run_taskkill(process, force=False)
+            if wait_for_process_exit(process, timeout=2):
+                return
+        except FileNotFoundError:
+            process.terminate()
+            if wait_for_process_exit(process, timeout=2):
+                return
         except Exception:
             pass
 
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        return
+        try:
+            run_taskkill(process, force=True)
+            if wait_for_process_exit(process, timeout=5):
+                return
+        except FileNotFoundError:
+            process.kill()
+            if wait_for_process_exit(process, timeout=5):
+                return
+        except Exception:
+            pass
+
+        if process.poll() is not None:
+            return
+
+        raise RuntimeError(f"Failed to stop process tree for PID {process.pid}")
 
     try:
         pgid = os.getpgid(process.pid)
@@ -103,7 +155,7 @@ def stream_process(process_id: str, command: str):
     try:
         process = subprocess.Popen(command, **build_popen_kwargs())
 
-        processes[process_id] = process
+        register_process(process_id, process)
 
         if process.stdout is None:
             raise Exception("Failed to capture stdout")
@@ -115,7 +167,7 @@ def stream_process(process_id: str, command: str):
         process.wait()
 
     finally:
-        pop_process(process_id)
+        pop_process_if_same(process_id, process)
 
 
 def build_state_filename(filename: str) -> str:
@@ -156,7 +208,7 @@ def run(cmd: str, id: str):
 
 @app.get("/stop")
 def stop(id: str):
-    process = processes.get(id)
+    process = take_process(id)
 
     if not process:
         raise HTTPException(status_code=404, detail="Process not found")
@@ -164,9 +216,9 @@ def stop(id: str):
     try:
         stop_process_tree(process)
     except Exception as e:
+        if process.poll() is None:
+            register_process(id, process)
         raise HTTPException(status_code=500, detail=str(e))
-
-    pop_process(id)
 
     return {"status": "stopped"}
 
