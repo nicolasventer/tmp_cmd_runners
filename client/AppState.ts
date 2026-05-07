@@ -1,6 +1,7 @@
 export type Runner = {
 	command: string;
 	transform: string;
+	applyTransform: boolean;
 	layout: {
 		x?: number;
 		y?: number;

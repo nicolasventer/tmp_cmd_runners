@@ -13,6 +13,18 @@ import "./styles.css";
 
 const NEW_STATE_VALUE = "__new__";
 
+const normalizeState = (nextState: AppState): AppState => ({
+	idToRunner: Object.fromEntries(
+		Object.entries(nextState.idToRunner).map(([id, runner]) => [
+			id,
+			{
+				...runner,
+				applyTransform: runner.applyTransform ?? false,
+			},
+		]),
+	),
+});
+
 export default function App() {
 	const [state, setState] = useState<AppState>({ idToRunner: {} });
 	const [stateFiles, setStateFiles] = useState<string[]>([]);
@@ -110,6 +122,7 @@ export default function App() {
 				[id]: {
 					command: "",
 					transform: "",
+					applyTransform: false,
 					layout: { w: 6, h: 3 },
 				},
 			},
@@ -139,7 +152,7 @@ export default function App() {
 			throw new Error("Failed to load selected state");
 		}
 
-		const nextState = (await response.json()) as AppState;
+		const nextState = normalizeState((await response.json()) as AppState);
 		setState(nextState);
 		setHasChanged(false);
 	}, [selectedStateFile]);
@@ -289,6 +302,7 @@ export default function App() {
 							id={id}
 							command={runner.command}
 							transform={runner.transform}
+							applyTransform={runner.applyTransform}
 							updateRunner={updateRunner}
 							onRemove={removeRunner}
 						/>

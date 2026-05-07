@@ -8,11 +8,12 @@ export type CommandRunnerProps = {
 	id: string;
 	command: string;
 	transform: string;
+	applyTransform: boolean;
 	updateRunner: (id: string, updates: Partial<Runner>) => void;
 	onRemove: (id: string) => void;
 };
 
-export const CommandRunner = memo(({ id, command, transform, updateRunner, onRemove }: CommandRunnerProps) => {
+export const CommandRunner = memo(({ id, command, transform, applyTransform, updateRunner, onRemove }: CommandRunnerProps) => {
 	/* -------------------- STATE -------------------- */
 	const [output, setOutput] = useState("");
 
@@ -21,7 +22,6 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 	const [processId, setProcessId] = useState<string | null>(null);
 
 	const [bShowTransform, setBShowTransform] = useState(false);
-	const [bApplyingTransform, setBApplyingTransform] = useState(false);
 
 	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
 
@@ -45,24 +45,59 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 	const stopInFlightRef = useRef(false);
 
 	/* -------------------- TRANSFORM -------------------- */
-	const setApplyTransform = async (applying: boolean) => {
-		if (!applying) {
-			setBApplyingTransform(false);
+	const clearTransform = () => {
+		if (transformFn.current) {
+			URL.revokeObjectURL(transformFn.current.url);
+			transformFn.current = null;
+		}
+	};
 
-			if (transformFn.current) {
-				URL.revokeObjectURL(transformFn.current.url);
-				transformFn.current = null;
-			}
+	useEffect(() => {
+		let cancelled = false;
+
+		if (!applyTransform || !transform.trim()) {
+			clearTransform();
 			return;
 		}
 
-		const blob = new Blob([transform], { type: "text/javascript" });
-		const url = URL.createObjectURL(blob);
-		const module = await import(url);
+		const loadTransform = async () => {
+			const blob = new Blob([transform], { type: "text/javascript" });
+			const url = URL.createObjectURL(blob);
 
-		transformFn.current = { url, fn: module.default };
-		setBApplyingTransform(true);
-	};
+			try {
+				const module = await import(url);
+				if (cancelled) {
+					URL.revokeObjectURL(url);
+					return;
+				}
+
+				clearTransform();
+				transformFn.current = { url, fn: module.default };
+			} catch (error) {
+				URL.revokeObjectURL(url);
+				if (cancelled) return;
+
+				clearTransform();
+				updateRunner(id, { applyTransform: false });
+
+				const message = error instanceof Error ? error.message : "Unknown error";
+				window.alert(`Failed to apply transform: ${message}`);
+			}
+		};
+
+		loadTransform();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [applyTransform, id, transform, updateRunner]);
+
+	useEffect(
+		() => () => {
+			clearTransform();
+		},
+		[],
+	);
 
 	/* -------------------- COMMAND -------------------- */
 	const runCommand = async () => {
@@ -208,7 +243,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 
 	const onCommandChange = (id: string, command: string) => updateRunner(id, { command });
 	const onTransformChange = (id: string, transform: string) => updateRunner(id, { transform });
-	const transformToggleVariant = bApplyingTransform ? "info" : transform.trim() ? "warning" : "secondary";
+	const transformToggleVariant = applyTransform ? "info" : transform.trim() ? "warning" : "secondary";
 
 	/* -------------------- UI -------------------- */
 	return (
@@ -342,10 +377,10 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 				<button
 					id={`btn-${id}`}
 					disabled={!transform.trim()}
-					className={`btn ${bApplyingTransform ? "danger" : ""} apply-transform`}
-					onClick={() => setApplyTransform(!bApplyingTransform)}
+					className={`btn ${applyTransform ? "danger" : ""} apply-transform`}
+					onClick={() => updateRunner(id, { applyTransform: !applyTransform })}
 				>
-					{bApplyingTransform ? "Applying..." : "Apply Transform"}
+					{applyTransform ? "Applying..." : "Apply Transform"}
 				</button>
 			</div>
 		</div>

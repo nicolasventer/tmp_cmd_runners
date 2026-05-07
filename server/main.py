@@ -36,6 +36,7 @@ class Layout(BaseModel):
 class Runner(BaseModel):
     command: str
     transform: str
+    applyTransform: bool
     layout: Layout
 
 
