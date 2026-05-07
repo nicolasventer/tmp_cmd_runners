@@ -208,6 +208,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 
 	const onCommandChange = (id: string, command: string) => updateRunner(id, { command });
 	const onTransformChange = (id: string, transform: string) => updateRunner(id, { transform });
+	const transformToggleVariant = bApplyingTransform ? "info" : transform.trim() ? "warning" : "secondary";
 
 	/* -------------------- UI -------------------- */
 	return (
@@ -318,7 +319,7 @@ export const CommandRunner = memo(({ id, command, transform, updateRunner, onRem
 			</div>
 
 			{/* TOGGLE */}
-			<button onClick={() => setBShowTransform((prev) => !prev)} className="btn secondary">
+			<button onClick={() => setBShowTransform((prev) => !prev)} className={`btn ${transformToggleVariant}`}>
 				{bShowTransform ? "Hide Transform" : "Show Transform"}
 			</button>
 

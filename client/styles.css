@@ -167,6 +167,14 @@ body {
 }
 
 /* Variants */
+.btn.success {
+	background: #16a34a;
+}
+
+.btn.success:hover {
+	background: #15803d;
+}
+
 .btn.danger {
 	background: #dc2626;
 }
@@ -185,6 +193,22 @@ body {
 	background: #2a2a2a;
 	color: white;
 	border-color: #666;
+}
+
+.btn.info {
+	background: #7c3aed;
+}
+
+.btn.info:hover {
+	background: #6d28d9;
+}
+
+.btn.warning {
+	background: #d97706;
+}
+
+.btn.warning:hover {
+	background: #b45309;
 }
 
 /* Optional: subtle glow for active state (nice for "Run") */

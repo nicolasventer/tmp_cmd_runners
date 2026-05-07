@@ -258,7 +258,7 @@ export default function App() {
 								window.alert(`Failed to save state: ${message}`);
 							});
 						}}
-						className="btn"
+						className="btn success"
 						disabled={!hasChanged}
 					>
 						Save
