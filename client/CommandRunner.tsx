@@ -1,23 +1,25 @@
 import type { OnMount } from "@monaco-editor/react";
 import { Editor } from "@monaco-editor/react";
 import autosize from "autosize";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import type { Runner } from "./AppState";
 
 export type CommandRunnerProps = {
 	id: string;
+	command: string;
+	transform: string;
+	updateRunner: (id: string, updates: Partial<Runner>) => void;
 	onRemove: (id: string) => void;
 };
 
-export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
+export const CommandRunner = memo(({ id, command, transform, updateRunner, onRemove }: CommandRunnerProps) => {
 	/* -------------------- STATE -------------------- */
-	const [cmd, setCmd] = useState("");
 	const [output, setOutput] = useState("");
 
 	const [running, setRunning] = useState(false);
 	const [processId, setProcessId] = useState<string | null>(null);
 
 	const [bShowTransform, setBShowTransform] = useState(false);
-	const [transformOutput, setTransformOutput] = useState("");
 	const [bApplyingTransform, setBApplyingTransform] = useState(false);
 
 	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
@@ -52,7 +54,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 			return;
 		}
 
-		const blob = new Blob([transformOutput], { type: "text/javascript" });
+		const blob = new Blob([transform], { type: "text/javascript" });
 		const url = URL.createObjectURL(blob);
 		const module = await import(url);
 
@@ -70,7 +72,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 		setProcessId(pid);
 
 		try {
-			const response = await fetch(`http://localhost:8000/run?id=${pid}&cmd=${encodeURIComponent(cmd.replace(/\n/g, " "))}`);
+			const response = await fetch(`http://localhost:8000/run?id=${pid}&cmd=${encodeURIComponent(command.replace(/\n/g, " "))}`);
 
 			if (!response.body) return;
 
@@ -171,6 +173,9 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 		if (transformZoneParent) observer.current.observe(transformZoneParent);
 	};
 
+	const onCommandChange = (id: string, command: string) => updateRunner(id, { command });
+	const onTransformChange = (id: string, transform: string) => updateRunner(id, { transform });
+
 	/* -------------------- UI -------------------- */
 	return (
 		<div className="runner" ref={runnerRef}>
@@ -179,10 +184,10 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 				<textarea
 					ref={textareaRef}
 					className="input"
-					value={cmd}
+					value={command}
 					disabled={running}
 					placeholder="Enter command"
-					onChange={(e) => setCmd(e.target.value)}
+					onChange={(e) => onCommandChange(id, e.target.value)}
 					onKeyDown={(e) => {
 						autosize(e.currentTarget);
 
@@ -293,8 +298,8 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 				<div style={{ position: "absolute", left: 0, top: 0 }}>
 					<Editor
 						language="javascript"
-						value={transformOutput}
-						onChange={(v) => setTransformOutput(v ?? "")}
+						value={transform}
+						onChange={(v) => onTransformChange(id, v ?? "")}
 						onMount={handleEditorMount}
 						options={{ automaticLayout: false }}
 					/>
@@ -302,7 +307,7 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 
 				<button
 					id={`btn-${id}`}
-					disabled={!transformOutput.trim()}
+					disabled={!transform.trim()}
 					className={`btn ${bApplyingTransform ? "danger" : ""} apply-transform`}
 					onClick={() => setApplyTransform(!bApplyingTransform)}
 				>
@@ -311,4 +316,5 @@ export const CommandRunner = ({ id, onRemove }: CommandRunnerProps) => {
 			</div>
 		</div>
 	);
-};
+});
+CommandRunner.displayName = "CommandRunner";

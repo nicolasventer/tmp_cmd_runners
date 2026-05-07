@@ -3,7 +3,9 @@
 CommandRunners is a small full-stack app for launching shell commands from a browser UI, watching their output stream in real time, and organizing multiple command panels in a draggable, resizable grid.
 
 > [!WARNING]
-> This application is intended to be run **LOCALLY ONLY**. It can execute arbitrary shell commands and therefore gives full access to the operating system account running it. Do not expose it to untrusted users or public networks.
+> This application is intended to be run **LOCALLY ONLY**.
+> _It can execute arbitrary shell commands and therefore gives full access to the operating system account running it._
+> _Do not expose it to untrusted users or public networks._
 
 It is split into:
 
