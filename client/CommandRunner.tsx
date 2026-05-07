@@ -16,6 +16,7 @@ export type CommandRunnerProps = {
 export const CommandRunner = memo(({ id, command, transform, applyTransform, updateRunner, onRemove }: CommandRunnerProps) => {
 	/* -------------------- STATE -------------------- */
 	const [output, setOutput] = useState("");
+	const [isOutputMaximized, setIsOutputMaximized] = useState(false);
 
 	const [running, setRunning] = useState(false);
 	const [stopping, setStopping] = useState(false);
@@ -98,6 +99,19 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 		},
 		[],
 	);
+
+	useEffect(() => {
+		if (!isOutputMaximized) return;
+
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setIsOutputMaximized(false);
+			}
+		};
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [isOutputMaximized]);
 
 	/* -------------------- COMMAND -------------------- */
 	const runCommand = async () => {
@@ -291,6 +305,9 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 
 			{/* OUTPUT */}
 			<div className="runner-output" ref={parentRef}>
+				<button className="output-hover-action btn secondary" onClick={() => setIsOutputMaximized(true)} type="button">
+					Maximize
+				</button>
 				<pre
 					ref={outputRef}
 					className="output"
@@ -352,6 +369,17 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 					</div>
 				</div>
 			</div>
+
+			{isOutputMaximized && (
+				<div className="output-modal" role="dialog" aria-modal="true" aria-label="Maximized command output">
+					<div className="output-modal-header">
+						<button className="btn secondary" onClick={() => setIsOutputMaximized(false)} type="button">
+							Restore
+						</button>
+					</div>
+					<pre className="output output-modal-content">{output || "Output will appear here..."}</pre>
+				</div>
+			)}
 
 			{/* TOGGLE */}
 			<button onClick={() => setBShowTransform((prev) => !prev)} className={`btn ${transformToggleVariant}`}>

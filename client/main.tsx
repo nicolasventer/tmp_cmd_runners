@@ -63,6 +63,9 @@ export default function App() {
 				handles: "se",
 				element: ".my-custom-resize-handle",
 			},
+			draggable: {
+				cancel: ".output-modal",
+			},
 		});
 
 		const syncLayout = (_event: Event, items: GridStackNode[]) => {
@@ -156,6 +159,11 @@ export default function App() {
 		setState(nextState);
 		setHasChanged(false);
 	}, [selectedStateFile]);
+
+	const clearRunners = useCallback(() => {
+		setState({ idToRunner: {} });
+		setHasChanged(true);
+	}, []);
 
 	const saveSelectedState = useCallback(async () => {
 		const filename = selectedStateFile === NEW_STATE_VALUE ? "" : selectedStateFile;
@@ -254,15 +262,19 @@ export default function App() {
 					</select>
 					<button
 						onClick={() => {
+							if (selectedStateFile === NEW_STATE_VALUE) {
+								clearRunners();
+								return;
+							}
+
 							loadSelectedState().catch((error: unknown) => {
 								const message = error instanceof Error ? error.message : "Unknown error";
 								window.alert(`Failed to load state: ${message}`);
 							});
 						}}
 						className="btn secondary"
-						disabled={selectedStateFile === NEW_STATE_VALUE}
 					>
-						Load
+						{selectedStateFile === NEW_STATE_VALUE ? "Clear" : "Load"}
 					</button>
 					<button
 						onClick={() => {
