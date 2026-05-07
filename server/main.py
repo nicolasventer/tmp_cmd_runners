@@ -293,3 +293,21 @@ def rename_state(request: RenameStateRequest):
         "new_filename": new_filename,
         "path": str(new_path),
     }
+
+
+@app.delete("/state")
+def delete_state(filename: str):
+    state_path = get_state_path(filename)
+
+    if not state_path.exists() or not state_path.is_file():
+        raise HTTPException(status_code=404, detail="State file not found")
+
+    try:
+        state_path.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {
+        "status": "deleted",
+        "filename": state_path.name,
+    }

@@ -374,7 +374,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 				<div className="output-modal" role="dialog" aria-modal="true" aria-label="Maximized command output">
 					<div className="output-modal-header">
 						<button className="btn secondary" onClick={() => setIsOutputMaximized(false)} type="button">
-							Restore
+							Minimize
 						</button>
 					</div>
 					<pre className="output output-modal-content">{output || "Output will appear here..."}</pre>
@@ -392,7 +392,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 					<div className="other-custom-resize-handle" ref={otherRef} />
 				</div>
 
-				<div style={{ position: "absolute", left: 0, top: 0 }}>
+				<div style={{ position: "absolute", left: 0, top: 0, border: "solid 3px white" }}>
 					<Editor
 						language="javascript"
 						value={transform}

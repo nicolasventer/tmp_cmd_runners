@@ -212,6 +212,26 @@ export default function App() {
 		setHasChanged(false);
 	}, [refreshStateFiles, selectedStateFile]);
 
+	const deleteSelectedState = useCallback(async () => {
+		if (selectedStateFile === NEW_STATE_VALUE) return;
+
+		const confirmed = window.confirm(`Delete state "${selectedStateFile}"? This cannot be undone.`);
+		if (!confirmed) return;
+
+		const response = await fetch(`http://localhost:8000/state?filename=${encodeURIComponent(selectedStateFile)}`, {
+			method: "DELETE",
+		});
+
+		if (!response.ok) {
+			throw new Error("Failed to delete state");
+		}
+
+		await refreshStateFiles();
+		setSelectedStateFile(NEW_STATE_VALUE);
+		setState({ idToRunner: {} });
+		setHasChanged(false);
+	}, [refreshStateFiles, selectedStateFile]);
+
 	useEffect(() => {
 		if (!grid.current) return;
 
@@ -299,6 +319,18 @@ export default function App() {
 						disabled={selectedStateFile === NEW_STATE_VALUE}
 					>
 						Rename
+					</button>
+					<button
+						onClick={() => {
+							deleteSelectedState().catch((error: unknown) => {
+								const message = error instanceof Error ? error.message : "Unknown error";
+								window.alert(`Failed to delete state: ${message}`);
+							});
+						}}
+						className="btn danger"
+						disabled={selectedStateFile === NEW_STATE_VALUE}
+					>
+						Delete
 					</button>
 					<div />
 					<div />
