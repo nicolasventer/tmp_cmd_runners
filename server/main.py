@@ -1,18 +1,36 @@
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import signal
 import subprocess
 import os
 import json
+import sys
 import threading
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 app = FastAPI()
-STATES_DIR = Path(__file__).resolve().parent / "states"
+
+
+def get_bundle_dir() -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent
+
+
+def get_data_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+BUNDLE_DIR = get_bundle_dir()
+DATA_DIR = get_data_dir()
+STATES_DIR = DATA_DIR / "states"
+INDEX_HTML = BUNDLE_DIR / "index.html"
 STATES_DIR.mkdir(exist_ok=True)
 
 app.add_middleware(
@@ -197,6 +215,14 @@ def require_state_filename(filename: str) -> str:
 
 def get_state_path(filename: str) -> Path:
     return STATES_DIR / require_state_filename(filename)
+
+
+@app.get("/")
+@app.get("/index.html")
+def root():
+    if not INDEX_HTML.is_file():
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+    return FileResponse(INDEX_HTML)
 
 
 @app.get("/run")
