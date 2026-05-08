@@ -325,18 +325,6 @@ body {
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
-.output-modal-header {
-	display: flex;
-	justify-content: flex-end;
-}
-
-.output-modal-content {
-	position: static;
-	flex: 1;
-	height: auto;
-	width: auto;
-}
-
 .my-custom-resize-handle > .handle,
 .other-custom-resize-handle {
 	position: absolute;

@@ -16,6 +16,7 @@ export type CommandRunnerProps = {
 export const CommandRunner = memo(({ id, command, transform, applyTransform, updateRunner, onRemove }: CommandRunnerProps) => {
 	/* -------------------- STATE -------------------- */
 	const [output, setOutput] = useState("");
+	const [displayedOutput, setDisplayedOutput] = useState<string | undefined>(undefined);
 	const [isOutputMaximized, setIsOutputMaximized] = useState(false);
 
 	const [running, setRunning] = useState(false);
@@ -27,6 +28,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 	const [editorHandle, setEditorHandle] = useState({ x: 0, y: 0 });
 
 	const [isAtBottom, setIsAtBottom] = useState(true);
+	const visibleOutput = displayedOutput ?? output;
 
 	/* -------------------- REFS -------------------- */
 	const transformFn = useRef<{
@@ -118,6 +120,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 		if (running || stopping) return;
 
 		setOutput("");
+		setDisplayedOutput(undefined);
 		setIsAtBottom(true);
 		setRunning(true);
 		setStopping(false);
@@ -147,6 +150,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 			setOutput(err instanceof Error ? "Error: " + err.message : "Unknown error");
 		}
 
+		setDisplayedOutput(undefined);
 		setRunning(false);
 		setStopping(false);
 		setProcessId(null);
@@ -173,6 +177,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 				const separator = prev.length === 0 || prev.endsWith("\n") ? "" : "\n";
 				return `${prev}${separator}[Stopped]\n`;
 			});
+			setDisplayedOutput(undefined);
 			setRunning(false);
 			setProcessId((current) => (current === pid ? null : current));
 		} catch (err) {
@@ -189,13 +194,14 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 
 	/* -------------------- AUTO SCROLL -------------------- */
 	useEffect(() => {
+		if (displayedOutput !== undefined) return;
 		if (!isAtBottom) return;
 
 		const el = outputRef.current;
 		if (!el) return;
 
 		el.scrollTop = el.scrollHeight;
-	}, [output]);
+	}, [displayedOutput, isAtBottom, output]);
 
 	const scrollToBottom = () => {
 		const el = outputRef.current;
@@ -258,9 +264,45 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 	const onCommandChange = (id: string, command: string) => updateRunner(id, { command });
 	const onTransformChange = (id: string, transform: string) => updateRunner(id, { transform });
 	const transformToggleVariant = applyTransform ? "info" : transform.trim() ? "warning" : "secondary";
+	const isPaused = displayedOutput !== undefined;
+	const handleCommandKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		autosize(e.currentTarget);
 
-	/* -------------------- UI -------------------- */
-	return (
+		if (e.key === "Enter" && e.ctrlKey) {
+			e.preventDefault();
+			runCommand();
+		}
+	};
+	const togglePauseResume = () => {
+		if (isPaused) {
+			setDisplayedOutput(undefined);
+			return;
+		}
+
+		setDisplayedOutput(output);
+	};
+	const executionButtons = running ? (
+		<>
+			<button onClick={togglePauseResume} className="btn secondary" disabled={stopping} type="button">
+				{isPaused ? "Resume" : "Pause"}
+			</button>
+			<button onClick={stopCommand} className="btn danger" disabled={stopping} type="button">
+				{stopping ? "Stopping..." : "Stop"}
+			</button>
+		</>
+	) : (
+		<>
+			{isPaused && (
+				<button onClick={() => setDisplayedOutput(undefined)} className="btn secondary" type="button">
+					Resume
+				</button>
+			)}
+			<button onClick={runCommand} className="btn" disabled={stopping} type="button">
+				Run
+			</button>
+		</>
+	);
+	const runnerContent = (
 		<div className="runner" ref={runnerRef}>
 			{/* COMMAND INPUT */}
 			<div className="runner-row">
@@ -271,25 +313,10 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 					disabled={running || stopping}
 					placeholder="Enter command (Ctrl+Enter to run)"
 					onChange={(e) => onCommandChange(id, e.target.value)}
-					onKeyDown={(e) => {
-						autosize(e.currentTarget);
-
-						if (e.key === "Enter" && e.ctrlKey) {
-							e.preventDefault();
-							runCommand();
-						}
-					}}
+					onKeyDown={handleCommandKeyDown}
 				/>
 
-				{running ? (
-					<button onClick={stopCommand} className="btn danger" disabled={stopping}>
-						{stopping ? "Stopping..." : "Stop"}
-					</button>
-				) : (
-					<button onClick={runCommand} className="btn" disabled={stopping}>
-						Run
-					</button>
-				)}
+				{executionButtons}
 
 				<button
 					className="btn remove"
@@ -305,8 +332,8 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 
 			{/* OUTPUT */}
 			<div className="runner-output" ref={parentRef}>
-				<button className="output-hover-action btn secondary" onClick={() => setIsOutputMaximized(true)} type="button">
-					Maximize
+				<button className="output-hover-action btn secondary" onClick={() => setIsOutputMaximized((prev) => !prev)} type="button">
+					{isOutputMaximized ? "Minimize" : "Maximize"}
 				</button>
 				<pre
 					ref={outputRef}
@@ -322,7 +349,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 						setIsAtBottom(atBottom);
 					}}
 				>
-					{output || "Output will appear here..."}
+					{visibleOutput || "Output will appear here..."}
 				</pre>
 
 				{/* Scroll to bottom button */}
@@ -370,17 +397,6 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 				</div>
 			</div>
 
-			{isOutputMaximized && (
-				<div className="output-modal" role="dialog" aria-modal="true" aria-label="Maximized command output">
-					<div className="output-modal-header">
-						<button className="btn secondary" onClick={() => setIsOutputMaximized(false)} type="button">
-							Minimize
-						</button>
-					</div>
-					<pre className="output output-modal-content">{output || "Output will appear here..."}</pre>
-				</div>
-			)}
-
 			{/* TOGGLE */}
 			<button onClick={() => setBShowTransform((prev) => !prev)} className={`btn ${transformToggleVariant}`}>
 				{bShowTransform ? "Hide Transform" : "Show Transform"}
@@ -398,7 +414,7 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 						value={transform}
 						onChange={(v) => onTransformChange(id, v ?? "")}
 						onMount={handleEditorMount}
-						options={{ automaticLayout: false }}
+						options={{ automaticLayout: false, readOnly: applyTransform }}
 					/>
 				</div>
 
@@ -412,6 +428,15 @@ export const CommandRunner = memo(({ id, command, transform, applyTransform, upd
 				</button>
 			</div>
 		</div>
+	);
+
+	/* -------------------- UI -------------------- */
+	return isOutputMaximized ? (
+		<div className="output-modal" role="dialog" aria-modal="true" aria-label="Maximized command output">
+			{runnerContent}
+		</div>
+	) : (
+		runnerContent
 	);
 });
 CommandRunner.displayName = "CommandRunner";
