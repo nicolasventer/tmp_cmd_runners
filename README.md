@@ -14,7 +14,7 @@ CommandRunners is a local-first full-stack app for running shell commands from a
 The project is split into two parts:
 
 - `client/`: a React + Bun frontend using GridStack and Monaco Editor
-- `server/`: a FastAPI backend that runs commands and stores saved dashboard states
+- `server/`: a TypeScript backend using Bun and Elysia that runs commands and stores saved dashboard states
 
 ## Features
 
@@ -33,22 +33,14 @@ The project is split into two parts:
 ### Prerequisites
 
 - [Bun](https://bun.sh/)
-- Python 3.10+
-- FastAPI CLI support via `fastapi[standard]`
 
 ### 1. Start the backend
 
 From `server/`:
 
 ```bash
-python -m pip install "fastapi[standard]"
-fastapi dev main.py --host 127.0.0.1 --port 8000
-```
-
-If you prefer `pipx`, that works too:
-
-```bash
-pipx install "fastapi[standard]"
+bun install
+bun --watch src/index.ts
 ```
 
 ### 2. Start the frontend
@@ -61,6 +53,26 @@ bun --hot index.html
 ```
 
 Then open the local URL printed by Bun.
+
+## Bundled Build
+
+The repository also includes `build.sh` for producing bundled artifacts with Bun:
+
+```bash
+./build.sh
+```
+
+The script runs two build steps:
+
+- `bun build --compile --target=browser ./client/index.html --outdir=ts_server`
+- `bun build --compile ./server/src/index.ts --outfile ./dist/command-runners`
+
+This produces:
+
+- `ts_server/`: the bundled frontend assets
+- `dist/command-runners`: the compiled backend executable
+
+If you are building on Windows, Bun will emit the backend binary as `dist/command-runners.exe`.
 
 ## Usage
 
@@ -123,7 +135,7 @@ The server keeps active processes in memory and writes saved dashboard states to
 ```text
 CommandRunners/
   client/       # React + Bun frontend
-  server/       # FastAPI backend
+  server/       # Bun + Elysia backend
     states/     # Saved dashboard state files
   doc/          # Project assets such as screenshots
 ```
@@ -144,6 +156,6 @@ This project is a local development tool, not a production-ready remote executio
 ## Development Notes
 
 - The frontend uses Bun's HTML entrypoint workflow.
-- Command output is streamed from FastAPI with `StreamingResponse`.
+- Command output is streamed from the Bun + Elysia server using a `ReadableStream`.
 - Custom transforms are loaded dynamically from JavaScript entered in the UI.
 - Saved app state is stored as JSON files under `server/states/`.
