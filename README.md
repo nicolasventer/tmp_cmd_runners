@@ -1,60 +1,32 @@
-## CommandRunners
+# CommandRunners
 
-CommandRunners is a small full-stack app for launching shell commands from a browser UI, watching their output stream in real time, organizing multiple command panels in a draggable, resizable grid, and saving named dashboard layouts for later reuse.
+CommandRunners is a local-first full-stack app for running shell commands from a browser dashboard. It lets you open multiple command panels, watch live output, arrange panels in a draggable grid, and save dashboard layouts to disk for later reuse.
 
 > [!WARNING]
-> This application is intended to be run **LOCALLY ONLY**.
-> _It can execute arbitrary shell commands and therefore gives full access to the operating system account running it._
-> _Do not expose it to untrusted users or public networks._
+> This application is intended for **local use only**.
+> It can execute arbitrary shell commands with the same permissions as the account running the server.
+> Do not expose it to untrusted users or public networks.
 
 ![CommandRunners screenshot](doc/screenshot.jpeg)
 
-It is split into:
+## Overview
 
-- a `client` app built with React, Bun, GridStack, and Monaco
-- a `server` app built with FastAPI that starts and stops processes
+The project is split into two parts:
 
-## What It Does
+- `client/`: a React + Bun frontend using GridStack and Monaco Editor
+- `server/`: a FastAPI backend that runs commands and stores saved dashboard states
 
-- Run commands from a browser-based dashboard
-- Stream stdout and stderr into each runner panel
-- Open multiple runners at once
-- Drag and resize runners with GridStack
-- Stop a running process from the UI
-- Save the current dashboard state to JSON files on the server
-- Reload previously saved runner layouts and commands
-- Rename saved dashboard states from the UI
-- Refresh the list of saved states without reloading the page
-- Auto-follow streaming output and jump back to the bottom after scrolling away
-- Optionally apply a custom JavaScript transform to the streamed output
+## Features
 
-## Architecture
-
-### Client
-
-The frontend lives in `client/` and provides the command runner interface. Each runner keeps track of:
-
-- the command to execute
-- the streamed output
-- whether the process is running
-- an optional transform function for post-processing output
-
-The app also tracks global dashboard state, including the set of runners and each runner's saved GridStack layout. Users can select a saved state, load it, save changes back to disk, or rename the saved file from the header controls.
-
-The UI expects the backend to be available at `http://localhost:8000`.
-
-### Server
-
-The backend lives in `server/` and exposes endpoints for both command execution and saved state management:
-
-- `GET /run?id=<id>&cmd=<command>` to start a command and stream its output
-- `GET /stop?id=<id>` to stop a running command by its runner ID
-- `POST /state?filename=<optional-name>` to save the current app state to `server/states/`
-- `GET /states` to list saved state files
-- `GET /state?filename=<name>` to load one saved state file
-- `POST /state/rename` to rename a saved state file
-
-The current implementation stores active processes in memory, writes saved dashboard states as JSON files, and uses OS-specific process-group handling so commands can be stopped on both Windows and Linux.
+- Run shell commands from a browser UI
+- Stream combined stdout and stderr into each runner
+- Open, remove, drag, and resize multiple runner panels
+- Stop a running command from the UI
+- Pause output updates while a command is still running, then resume
+- Maximize a runner's output into a modal view
+- Save, load, rename, refresh, and delete dashboard states
+- Persist runner commands, transforms, and grid layout to JSON files
+- Optionally transform output with a custom JavaScript function
 
 ## Quick Start
 
@@ -62,18 +34,22 @@ The current implementation stores active processes in memory, writes saved dashb
 
 - [Bun](https://bun.sh/)
 - Python 3.10+
-- [`pipx`](https://pipx.pypa.io/)
+- FastAPI CLI support via `fastapi[standard]`
 
 ### 1. Start the backend
 
 From `server/`:
 
 ```bash
-pipx install "fastapi[standard]"
+python -m pip install "fastapi[standard]"
 fastapi dev main.py --host 127.0.0.1 --port 8000
 ```
 
-The backend stop flow is designed to work on both Windows and Linux.
+If you prefer `pipx`, that works too:
+
+```bash
+pipx install "fastapi[standard]"
+```
 
 ### 2. Start the frontend
 
@@ -84,26 +60,28 @@ bun install
 bun --hot index.html
 ```
 
-Then open the local URL shown by Bun in your browser.
+Then open the local URL printed by Bun.
 
 ## Usage
 
 1. Click `Add Runner`.
 2. Enter a shell command.
-3. Press `Run`, or use `Ctrl+Enter` inside the command box.
-4. Watch the output stream live.
-5. Use `Stop` to terminate the process.
-6. Use `Show Transform` to open the Monaco editor and provide a JavaScript function that rewrites the output.
-7. Choose `new` or a saved state from the header dropdown.
-8. Use `Save`, `Load`, `Rename`, and `Refresh` to manage saved dashboard states.
+3. Press `Run`, or use `Ctrl+Enter` in the command box.
+4. Watch the output stream in real time.
+5. Use `Pause` to freeze the displayed output while the process keeps running, then `Resume` to catch back up.
+6. Use `Stop` to terminate the running process tree.
+7. Use `Maximize` to focus on one runner's output and `Escape` to close the modal view.
+8. Use `Show Transform` to open the Monaco editor and enter a default-exported JavaScript transform.
+9. Use the header controls to `Load`, `Save`, `Rename`, `Delete`, and `Refresh` saved dashboard states.
 
-Saved state files contain runner configuration and layout data:
+Saved state files include:
 
 - command text
 - transform source
-- GridStack position and size
+- transform enabled flag
+- GridStack layout
 
-They do not restore active processes or previously streamed output.
+Saved states do not restore active processes or previous output history.
 
 Example transform module:
 
@@ -113,32 +91,59 @@ export default function transform(output) {
 }
 ```
 
+## How It Works
+
+### Client
+
+The frontend in `client/` renders a grid of runner panels. Each runner stores:
+
+- command text
+- transform source
+- whether the transform is enabled
+- saved grid layout (`x`, `y`, `w`, `h`)
+
+The UI also tracks the selected saved state file and whether the current dashboard has unsaved changes. The frontend currently expects the backend at `http://localhost:8000`.
+
+### Server
+
+The backend in `server/` exposes HTTP endpoints for command execution and state management:
+
+- `GET /run?id=<id>&cmd=<command>`: start a command and stream output
+- `GET /stop?id=<id>`: stop a running command by runner ID
+- `POST /state?filename=<optional-name>`: save the current dashboard state
+- `GET /states`: list saved state files
+- `GET /state?filename=<name>`: load a saved state file
+- `POST /state/rename`: rename a saved state file
+- `DELETE /state?filename=<name>`: delete a saved state file
+
+The server keeps active processes in memory and writes saved dashboard states to `server/states/`. Process stopping uses platform-specific handling so it works on both Windows and Linux.
+
 ## Project Structure
 
 ```text
 CommandRunners/
-  client/   # React + Bun frontend
-  server/   # FastAPI backend
-    states/ # Saved dashboard state files
+  client/       # React + Bun frontend
+  server/       # FastAPI backend
+    states/     # Saved dashboard state files
+  doc/          # Project assets such as screenshots
 ```
 
 ## Limitations
 
-- The backend currently allows arbitrary shell command execution.
-- There is no authentication or authorization layer.
-- CORS is fully open in the current server implementation.
+- The backend accepts arbitrary shell commands.
+- There is no authentication or authorization.
+- CORS is fully open.
 - Running processes are tracked in memory only.
-- Saved state files store runner config and layout only, not active process state or output history.
-- Stop-process behavior depends on platform-specific process-group APIs, so edge cases may still vary slightly between shells and operating systems.
-- The frontend currently targets a backend at `http://localhost:8000` with no environment-based configuration.
+- Saved state files store configuration and layout, not running-process state or output history.
+- The frontend uses a hardcoded backend URL of `http://localhost:8000`.
 
 ## Security Notice
 
-This project should be treated as a local development tool, not a production-ready remote execution service. Do not expose the current backend directly to untrusted users or public networks.
+This project is a local development tool, not a production-ready remote execution service. Add authentication, access controls, and a safer execution model before considering any broader exposure.
 
 ## Development Notes
 
-- The frontend is built around Bun's HTML entrypoint workflow.
-- The server streams command output through `StreamingResponse`.
-- Output transforms are loaded dynamically from a JavaScript module entered in the UI.
-- Saved app state is persisted as JSON files in `server/states/`.
+- The frontend uses Bun's HTML entrypoint workflow.
+- Command output is streamed from FastAPI with `StreamingResponse`.
+- Custom transforms are loaded dynamically from JavaScript entered in the UI.
+- Saved app state is stored as JSON files under `server/states/`.

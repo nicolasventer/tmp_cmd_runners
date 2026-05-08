@@ -1,13 +1,14 @@
 # Client
 
-This is the frontend for CommandRunners. It renders a dashboard where each widget can run a shell command, display its live output, optionally transform that output with custom JavaScript, and participate in a saved dashboard state that can be loaded or renamed later.
+This is the frontend for CommandRunners. It renders a browser dashboard where each panel can run a shell command, stream output, apply an optional JavaScript transform, and participate in a saved dashboard layout.
 
 ## Stack
 
-- React
+- React 19
 - Bun
 - GridStack
 - Monaco Editor
+- `autosize`
 
 ## Requirements
 
@@ -26,29 +27,51 @@ bun install
 bun --hot index.html
 ```
 
-Bun will serve the app locally and enable hot reloading.
+Bun serves the app locally with hot reload.
 
 ## Build
 
-The source currently includes Bun build examples:
+Example Bun build command:
 
 ```bash
 bun build --outdir ./out index.html
 ```
 
-## Features
+## UI Features
 
 - Add and remove runner panels
 - Drag and resize panels with GridStack
-- Run commands and stream output live
+- Run commands with the `Run` button or `Ctrl+Enter`
+- Stream output live from the backend
 - Stop running commands
-- Save the current dashboard state
-- Load a previously saved dashboard state
-- Rename saved dashboard state files
-- Refresh the saved-state list from the server
-- Auto-scroll output while following the latest log lines
-- Manually jump back to the bottom when reviewing older output
-- Open a Monaco editor panel to define an output transform function
+- Pause the displayed output while a process keeps running
+- Resume back to the live stream after pausing
+- Auto-scroll while following the latest output
+- Jump back to the bottom after scrolling up
+- Maximize output into a modal view and close it with `Escape`
+- Open a Monaco editor panel for output transforms
+
+## Saved State Workflow
+
+The header controls manage server-backed JSON state files:
+
+- `new`: work with an unsaved dashboard
+- `Refresh`: reload the available saved files
+- `Load`: replace the current dashboard with the selected saved state
+- `Save`: create or overwrite a saved state file
+- `Rename`: rename the selected saved file
+- `Delete`: remove the selected saved file
+- `Clear`: when `new` is selected, clear all current runners
+
+Each saved state stores:
+
+- the runners currently on the page
+- each runner's command text
+- each runner's transform source
+- each runner's transform enabled flag
+- each runner's GridStack layout (`x`, `y`, `w`, `h`)
+
+Saved states do not restore live output or restart running processes.
 
 ## Transform Function
 
@@ -60,30 +83,12 @@ export default function transform(output) {
 }
 ```
 
-When enabled, the function receives the accumulated output string and returns the transformed text to display.
-
-## Saved State Workflow
-
-The header controls manage server-backed JSON state files:
-
-- `new`: work with an unsaved dashboard
-- `Refresh`: reload the available saved files
-- `Load`: replace the current dashboard with the selected saved state
-- `Save`: create or overwrite a saved state file
-- `Rename`: rename the selected saved file
-
-Each saved state stores:
-
-- the runners currently on the page
-- each runner's command text
-- each runner's transform source
-- each runner's GridStack layout (`x`, `y`, `w`, `h`)
-
-Saved states do not restore live output or restart running processes.
+When enabled, the function receives the accumulated output string and returns the text shown in the output panel. If the transform fails to load, the UI disables it and shows an error.
 
 ## Notes
 
 - The backend URL is currently hardcoded to `http://localhost:8000`.
-- Command input is sent as a single-line command string.
-- Multi-line command text is flattened into a single line before it is sent to the backend.
-- The frontend is intended for local use alongside the companion FastAPI server.
+- Command input is sent as a single command string.
+- Multi-line command text is flattened into a single line before being sent to the backend.
+- Transform code runs in the browser by loading a generated JavaScript module.
+- This frontend is intended for local use alongside the companion FastAPI server.

@@ -1,19 +1,23 @@
 # Server
 
-This is the FastAPI backend for CommandRunners. It starts shell commands, streams their output back to the client, allows a running command to be stopped by ID, and persists saved frontend dashboard states as JSON files.
+This is the FastAPI backend for CommandRunners. It starts shell commands, streams their output back to the client, stops running processes by runner ID, and persists saved dashboard states as JSON files.
 
 ## Requirements
 
 - Python 3.10+
-- [`pipx`](https://pipx.pypa.io/)
+- FastAPI CLI support via `fastapi[standard]`
 
 ## Setup
 
 ```bash
-pipx install "fastapi[standard]"
+python -m pip install "fastapi[standard]"
 ```
 
-If you already have `fastapi` installed another way, you can keep using that.
+If you prefer `pipx`, that works as well:
+
+```bash
+pipx install "fastapi[standard]"
+```
 
 ## Run
 
@@ -23,11 +27,13 @@ From the `server/` directory:
 fastapi dev main.py --host 127.0.0.1 --port 8000
 ```
 
+The server creates `server/states/` automatically if it does not already exist.
+
 ## API
 
 ### `GET /run`
 
-Starts a command and streams the combined stdout/stderr response.
+Starts a shell command and streams combined stdout and stderr as plain text.
 
 Query parameters:
 
@@ -40,9 +46,13 @@ Example:
 /run?id=123&cmd=python%20--version
 ```
 
+Validation:
+
+- returns `400` if `cmd` is empty
+
 ### `GET /stop`
 
-Stops a running process associated with a runner ID.
+Stops the running process associated with a runner ID.
 
 Query parameters:
 
@@ -54,13 +64,19 @@ Example:
 /stop?id=123
 ```
 
+Responses:
+
+- `200` with `{"status":"stopped"}`
+- `404` if the process is not found
+- `500` if stop handling fails
+
 ### `POST /state`
 
 Stores the full frontend app state as JSON under `server/states/`.
 
 Query parameters:
 
-- `filename`: optional output filename. If omitted or empty, the server generates one automatically.
+- `filename`: optional output filename; if omitted or empty, the server generates one automatically
 
 Request body:
 
@@ -70,6 +86,7 @@ Request body:
     "123": {
       "command": "python --version",
       "transform": "",
+      "applyTransform": false,
       "layout": {
         "w": 6,
         "h": 3
@@ -77,12 +94,6 @@ Request body:
     }
   }
 }
-```
-
-Example:
-
-```text
-POST /state?filename=session-1
 ```
 
 Response shape:
@@ -109,7 +120,7 @@ Response shape:
 
 ### `GET /state`
 
-Returns the parsed JSON content of a saved global state file.
+Returns the parsed JSON content of a saved state file.
 
 Query parameters:
 
@@ -123,8 +134,9 @@ Example:
 
 Notes:
 
-- Filenames are normalized to stay inside `server/states/`.
-- Omitting `.json` still resolves to the matching JSON filename.
+- filenames are normalized to stay inside `server/states/`
+- omitting `.json` still resolves to the matching JSON filename
+- returns `404` if the file does not exist
 
 ### `POST /state/rename`
 
@@ -150,21 +162,44 @@ Response shape:
 }
 ```
 
+### `DELETE /state`
+
+Deletes a saved state file from `server/states/`.
+
+Query parameters:
+
+- `filename`: state filename to delete
+
+Example:
+
+```text
+/state?filename=session-2.json
+```
+
+Response shape:
+
+```json
+{
+  "status": "deleted",
+  "filename": "session-2.json"
+}
+```
+
 ## Implementation Notes
 
 - Active processes are stored in an in-memory dictionary keyed by runner ID.
 - Command output is streamed with FastAPI's `StreamingResponse`.
-- The server merges stderr into stdout before sending output back to the client.
-- CORS is currently open to all origins, methods, and headers.
+- The server merges stderr into stdout before streaming output.
+- CORS is open to all origins, methods, and headers.
 - Saved app states are written as JSON files in `server/states/`.
-- State management endpoints validate filenames and keep all file access scoped to `server/states/`.
-- Saved state data includes runner configuration and layout, but not live process state or streamed output history.
+- State-management endpoints validate filenames and keep file access scoped to `server/states/`.
+- Saved state data includes runner configuration and layout, but not live process state or output history.
 
 ## Platform Notes
 
-The backend now uses platform-appropriate process-tree handling so the stop endpoint works on both Windows and Linux:
+The backend uses platform-specific process-tree handling so `stop` works on both Windows and Linux:
 
-- Windows stops the target process tree with `taskkill /T /PID ...` and falls back to `taskkill /F /T /PID ...` if a graceful stop does not finish quickly.
+- Windows uses `taskkill /T /PID ...` and falls back to `taskkill /F /T /PID ...` if needed.
 - Linux starts commands in a new session and terminates the process group with `SIGTERM`, followed by `SIGKILL` only if needed.
 
 ## Security Warning
